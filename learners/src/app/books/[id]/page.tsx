@@ -34,7 +34,6 @@ export default async function BookDetailPage({
 
         <div>
           <h1 className="text-3xl font-bold">{book.title}</h1>
-          <p className="text-gray-500 mt-1">by {book.author}</p>
           <p className="text-2xl font-bold mt-4">₹{book.price}</p>
 
           {book.stock > 0 ? (

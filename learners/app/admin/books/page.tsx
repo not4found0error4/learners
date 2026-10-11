@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import type { AdminBook } from '@/components/admin/BookForm';
+import { BOOK_CATEGORIES } from '@/lib/categories';
 
 type ListedBook = AdminBook & { id: string; is_active: boolean };
 
@@ -72,14 +73,28 @@ export default function AdminBooksPage() {
             <table className="w-full min-w-200 text-left text-sm">
               <thead className="border-b bg-gray-100 text-xs uppercase text-gray-600">
                 <tr>
-                  <th className="p-3">Cover</th><th className="p-3">Title</th><th className="p-3">Author</th><th className="p-3">Price</th><th className="p-3">Stock</th><th className="p-3">Status</th><th className="p-3">Actions</th>
+                  <th className="p-3">Cover</th><th className="p-3">Title</th><th className="p-3">Price</th><th className="p-3">Stock</th><th className="p-3">Status</th><th className="p-3">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {books.map((book) => (
                   <tr key={book.id} className={`border-b last:border-0 ${book.is_active ? '' : 'bg-gray-100 text-gray-500'}`}>
                     <td className="p-3">{book.cover_image_url ? <img src={book.cover_image_url} alt="" className="h-14 w-10 object-cover" /> : <div className="flex h-14 w-10 items-center justify-center bg-gray-200 text-xs">None</div>}</td>
-                    <td className="p-3 font-medium">{book.title}</td><td className="p-3">{book.author}</td><td className="p-3">₹{Number(book.price).toFixed(2)}</td><td className="p-3">{book.stock}</td>
+                    <td className="p-3">
+                      <p className="font-medium">{book.title}</p>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {book.category && (
+                          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-800">
+                            {BOOK_CATEGORIES.find(({ slug }) => slug === book.category)?.label ?? book.category}
+                          </span>
+                        )}
+                        {book.is_bestseller && (
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
+                            Bestseller
+                          </span>
+                        )}
+                      </div>
+                    </td><td className="p-3">₹{Number(book.price).toFixed(2)}</td><td className="p-3">{book.stock}</td>
                     <td className="p-3"><span className={`rounded-full px-2 py-1 text-xs ${book.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>{book.is_active ? 'Active' : 'Inactive'}</span></td>
                     <td className="p-3"><div className="flex flex-wrap gap-2"><Link href={`/admin/books/${book.id}/edit`} className="rounded border px-3 py-1 hover:bg-gray-50">Edit</Link>{book.is_active ? <button type="button" onClick={() => void deactivateBook(book)} className="rounded border border-red-300 px-3 py-1 text-red-700 hover:bg-red-50">Deactivate</button> : <button type="button" onClick={() => void toggleBook(book)} className="rounded border border-green-300 px-3 py-1 text-green-700 hover:bg-green-50">Reactivate</button>}</div></td>
                   </tr>

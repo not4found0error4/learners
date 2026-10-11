@@ -7,6 +7,17 @@ export type OrderEmailCartItem = {
 };
 
 const FROM_ADDRESS = 'Learners Bookstore <onboarding@resend.dev>';
+export const ADMIN_EMAIL = 'learnerspublications@gmail.com';
+
+export type ContactEnquiryEmail = {
+  name: string;
+  email: string;
+  phone: string;
+  organization: string;
+  enquiryType: string;
+  subject: string;
+  message: string;
+};
 
 function escapeHtml(value: string) {
   return value
@@ -21,7 +32,12 @@ function formatCurrency(amount: number) {
   return `₹${amount.toFixed(2)}`;
 }
 
-export async function sendEmail(to: string, subject: string, html: string) {
+export async function sendEmail(
+  to: string,
+  subject: string,
+  html: string,
+  options: { replyTo?: string } = {},
+) {
   const apiKey = process.env.RESEND_API_KEY;
 
   if (!apiKey) {
@@ -34,11 +50,37 @@ export async function sendEmail(to: string, subject: string, html: string) {
     to,
     subject,
     html,
+    ...(options.replyTo ? { replyTo: options.replyTo } : {}),
   });
 
   if (error) {
     throw new Error(error.message);
   }
+}
+
+export function buildContactEnquiryEmail(enquiry: ContactEnquiryEmail) {
+  const details = [
+    ['Name', enquiry.name],
+    ['Email', enquiry.email],
+    ['Phone', enquiry.phone],
+    ['School / organisation', enquiry.organization],
+    ['Enquiry type', enquiry.enquiryType],
+    ['Subject', enquiry.subject],
+  ]
+    .filter(([, value]) => value)
+    .map(
+      ([label, value]) =>
+        `<p><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}</p>`,
+    )
+    .join('');
+
+  return `
+    <div style="font-family:Arial,sans-serif;line-height:1.5;color:#1f2937;">
+      <h1>New contact enquiry</h1>
+      ${details}
+      <h2>Message</h2>
+      <p style="white-space:pre-wrap;">${escapeHtml(enquiry.message)}</p>
+    </div>`;
 }
 
 export function buildOrderConfirmationEmail(

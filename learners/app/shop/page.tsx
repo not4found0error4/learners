@@ -1,20 +1,18 @@
+// The catalogue heading and introduction are placeholder copy.
 import { supabase } from '@/lib/supabase';
-import Image from 'next/image';
-import Link from 'next/link';
+import ShopCatalog, { type ShopBook } from '@/components/ShopCatalog';
 
-type Book = {
-  id: string;
-  title: string;
-  author: string;
-  price: number;
-  stock: number;
-  cover_image_url: string | null;
+type ShopPageProps = {
+  searchParams: Promise<{ category?: string | string[] }>;
 };
 
-export default async function HomePage() {
-  const { data: books, error } = await supabase
+export default async function ShopPage({ searchParams }: ShopPageProps) {
+  const { category } = await searchParams;
+  const initialCategory = Array.isArray(category) ? category[0] ?? '' : category ?? '';
+
+  const { data, error } = await supabase
     .from('books')
-    .select('*')
+    .select('id, title, price, stock, cover_image_url, category, is_bestseller, class_level, language, created_at')
     .eq('is_active', true)
     .order('created_at', { ascending: false });
 
@@ -23,35 +21,22 @@ export default async function HomePage() {
   }
 
   return (
-    <main className="max-w-6xl mx-auto px-4 py-10">
-      <h1 className="text-3xl font-bold mb-8">Our Books</h1>
-
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6">
-        {books?.map((book: Book) => (
-          <Link
-            key={book.id}
-            href={`/books/${book.id}`}
-            className="block border rounded-lg overflow-hidden hover:shadow-lg transition"
-          >
-            <div className="relative w-full h-56 bg-gray-100">
-              <Image
-                src={book.cover_image_url || 'https://placehold.co/300x400'}
-                alt={book.title}
-                fill
-                className="object-cover"
-              />
-            </div>
-            <div className="p-3">
-              <h2 className="font-semibold text-sm truncate">{book.title}</h2>
-              <p className="text-gray-500 text-xs">{book.author}</p>
-              <p className="mt-1 font-bold">₹{book.price}</p>
-              {book.stock === 0 && (
-                <span className="text-red-500 text-xs">Out of stock</span>
-              )}
-            </div>
-          </Link>
-        ))}
-      </div>
+    <main className="w-full">
+      <section className="mx-auto w-full max-w-7xl px-5 py-14 sm:px-8 sm:py-20 lg:px-10 lg:py-24">
+        <header className="mb-10 max-w-3xl">
+          <p className="mb-4 text-sm font-semibold uppercase tracking-wide text-brand-red">
+            Our catalogue
+          </p>
+          <h1 className="font-heading text-4xl font-bold leading-tight text-brand-blue sm:text-5xl">
+            Books for every classroom
+          </h1>
+          <p className="mt-5 text-base leading-8 text-slate-600 sm:text-lg">
+            Explore thoughtful learning resources for curious readers, growing minds, and
+            classrooms at every stage.
+          </p>
+        </header>
+        <ShopCatalog books={(data ?? []) as ShopBook[]} initialCategory={initialCategory} />
+      </section>
     </main>
   );
 }

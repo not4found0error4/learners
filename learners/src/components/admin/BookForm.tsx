@@ -2,16 +2,20 @@
 
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { BOOK_CATEGORIES } from '@/lib/categories';
 
 export type AdminBook = {
   id?: string;
   title: string;
-  author: string;
   description: string | null;
   price: number;
   stock: number;
   isbn: string | null;
   cover_image_url: string | null;
+  category: string | null;
+  is_bestseller: boolean;
+  class_level: string | null;
+  language: string;
 };
 
 type BookFormProps = {
@@ -21,12 +25,15 @@ type BookFormProps = {
 export default function BookForm({ book }: BookFormProps) {
   const router = useRouter();
   const [title, setTitle] = useState(book?.title || '');
-  const [author, setAuthor] = useState(book?.author || '');
   const [description, setDescription] = useState(book?.description || '');
   const [price, setPrice] = useState(book ? String(book.price) : '');
   const [stock, setStock] = useState(book ? String(book.stock) : '');
   const [isbn, setIsbn] = useState(book?.isbn || '');
   const [coverImageUrl, setCoverImageUrl] = useState(book?.cover_image_url || '');
+  const [category, setCategory] = useState(book?.category || '');
+  const [isBestseller, setIsBestseller] = useState(book?.is_bestseller ?? false);
+  const [classLevel, setClassLevel] = useState(book?.class_level || '');
+  const [language, setLanguage] = useState(book?.language || 'English');
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -37,20 +44,23 @@ export default function BookForm({ book }: BookFormProps) {
 
     const numericPrice = Number(price);
     const numericStock = Number(stock);
-    if (!title.trim() || !author.trim() || !Number.isFinite(numericPrice) || numericPrice <= 0 || !Number.isFinite(numericStock) || numericStock <= 0) {
-      setErrorMessage('Title, author, price, and stock are required. Price and stock must be positive.');
+    if (!title.trim() || !Number.isFinite(numericPrice) || numericPrice <= 0 || !Number.isFinite(numericStock) || numericStock <= 0) {
+      setErrorMessage('Title, price, and stock are required. Price and stock must be positive.');
       return;
     }
 
     setIsSaving(true);
     const formData = new FormData();
     formData.set('title', title.trim());
-    formData.set('author', author.trim());
     formData.set('description', description.trim());
     formData.set('price', String(numericPrice));
     formData.set('stock', String(numericStock));
     formData.set('isbn', isbn.trim());
     formData.set('coverImageUrl', coverImageUrl.trim());
+    formData.set('category', category);
+    formData.set('is_bestseller', String(isBestseller));
+    formData.set('class_level', classLevel.trim());
+    formData.set('language', language.trim() || 'English');
     if (coverFile) {
       formData.set('coverFile', coverFile);
     }
@@ -78,10 +88,6 @@ export default function BookForm({ book }: BookFormProps) {
         <input required value={title} onChange={(event) => setTitle(event.target.value)} className="w-full rounded border px-3 py-2" />
       </label>
       <label className="block">
-        <span className="mb-1 block text-sm font-medium">Author *</span>
-        <input required value={author} onChange={(event) => setAuthor(event.target.value)} className="w-full rounded border px-3 py-2" />
-      </label>
-      <label className="block">
         <span className="mb-1 block text-sm font-medium">Description</span>
         <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={5} className="w-full rounded border px-3 py-2" />
       </label>
@@ -99,6 +105,49 @@ export default function BookForm({ book }: BookFormProps) {
         <span className="mb-1 block text-sm font-medium">ISBN</span>
         <input value={isbn} onChange={(event) => setIsbn(event.target.value)} className="w-full rounded border px-3 py-2" />
       </label>
+      <div className="grid gap-5 sm:grid-cols-2">
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium">Category</span>
+          <select
+            value={category}
+            onChange={(event) => setCategory(event.target.value)}
+            className="w-full rounded border bg-white px-3 py-2"
+          >
+            <option value="">No category</option>
+            {BOOK_CATEGORIES.map(({ slug, label }) => (
+              <option key={slug} value={slug}>{label}</option>
+            ))}
+          </select>
+        </label>
+        <label className="flex items-center gap-2 self-end pb-2 text-sm font-medium">
+          <input
+            checked={isBestseller}
+            onChange={(event) => setIsBestseller(event.target.checked)}
+            type="checkbox"
+          />
+          Mark as bestseller
+        </label>
+      </div>
+      <div className="grid gap-5 sm:grid-cols-2">
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium">Class / level</span>
+          <input
+            value={classLevel}
+            onChange={(event) => setClassLevel(event.target.value)}
+            placeholder="e.g. Class 4"
+            className="w-full rounded border px-3 py-2"
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium">Language</span>
+          <input
+            value={language}
+            onChange={(event) => setLanguage(event.target.value)}
+            placeholder="English"
+            className="w-full rounded border px-3 py-2"
+          />
+        </label>
+      </div>
       <div className="space-y-3 rounded border p-4">
         <div>
           <p className="text-sm font-medium">Cover image</p>

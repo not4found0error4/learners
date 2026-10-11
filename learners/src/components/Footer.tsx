@@ -4,14 +4,7 @@ import { Clock, Mail, MapPin, Phone } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-
-const departmentLinks = [
-  'Academic Textbooks',
-  'Workbooks & Practice',
-  'General Knowledge',
-  "Early Years & Children's Learning",
-  'Exam Preparation',
-];
+import { BOOK_CATEGORIES } from '@/lib/categories';
 
 const companyLinks = [
   { href: '/', label: 'Home' },
@@ -63,9 +56,9 @@ export default function Footer() {
         <div>
           <h2 className="font-heading text-base font-semibold text-blue-900">Departments</h2>
           <ul className="mt-4 space-y-3">
-            {departmentLinks.map((label) => (
-              <li key={label}>
-                <Link href="/shop" className="text-sm text-slate-600 transition-colors hover:text-brand-red">
+            {BOOK_CATEGORIES.map(({ slug, label }) => (
+              <li key={slug}>
+                <Link href={`/shop?category=${slug}`} className="text-sm text-slate-600 transition-colors hover:text-brand-red">
                   {label}
                 </Link>
               </li>

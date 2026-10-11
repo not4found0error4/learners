@@ -1,12 +1,11 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import {
+  ADMIN_EMAIL,
   buildAdminOrderNotificationEmail,
   buildOrderConfirmationEmail,
   sendEmail,
 } from '@/lib/email';
 import { createSupabaseAdminClient } from '@/lib/supabaseAdmin';
-
-const ADMIN_EMAIL = 'learnerspublications@gmail.com';
 
 type CartItem = {
   id: string;

@@ -35,9 +35,9 @@ export default function AddToCartButton({
       type="button"
       disabled={disabled || isAdded}
       onClick={handleAddToCart}
-      className="mt-8 bg-black text-white px-6 py-3 rounded-lg transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+      className="inline-flex min-h-12 items-center justify-center rounded-full bg-brand-red px-7 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-slate-300"
     >
-      {isAdded ? 'Added' : 'Add to Cart'}
+      {disabled ? 'Out of stock' : isAdded ? 'Added' : 'Add to Cart'}
     </button>
   );
 }

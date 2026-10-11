@@ -1,14 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { hasAuthenticatedAdminSession } from '@/lib/adminAuth';
+import { BOOK_CATEGORIES } from '@/lib/categories';
 import { createSupabaseAdminClient } from '@/lib/supabaseAdmin';
 
 const BUCKET_NAME = 'book-covers';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-function invalidBookInput(title: string, author: string, price: number, stock: number) {
-  return !title || !author || !Number.isFinite(price) || price <= 0 || !Number.isFinite(stock) || stock <= 0;
+function invalidBookInput(title: string, price: number, stock: number) {
+  return !title || !Number.isFinite(price) || price <= 0 || !Number.isFinite(stock) || stock <= 0;
 }
 
 async function uploadCover(supabase: ReturnType<typeof createSupabaseAdminClient>, file: File) {
@@ -81,16 +82,30 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     const { id } = await context.params;
     const formData = await request.formData();
     const title = String(formData.get('title') || '').trim();
-    const author = String(formData.get('author') || '').trim();
     const description = String(formData.get('description') || '').trim();
     const price = Number(formData.get('price'));
     const stock = Number(formData.get('stock'));
     const isbn = String(formData.get('isbn') || '').trim() || null;
     const coverImageUrl = String(formData.get('coverImageUrl') || '').trim();
+    const categoryValue = formData.get('category');
+    const rawIsBestseller = formData.get('is_bestseller');
+    const classLevelValue = formData.get('class_level');
+    const languageValue = formData.get('language');
     const coverFile = formData.get('coverFile');
+    const category = typeof categoryValue === 'string' ? categoryValue.trim() || null : null;
+    const isBestseller = rawIsBestseller === 'true';
+    const classLevel = typeof classLevelValue === 'string' ? classLevelValue.trim() || null : null;
+    const language = typeof languageValue === 'string' ? languageValue.trim() || 'English' : 'English';
 
-    if (invalidBookInput(title, author, price, stock)) {
-      return NextResponse.json({ error: 'Title, author, price, and stock are required. Price and stock must be positive.' }, { status: 400 });
+    if (invalidBookInput(title, price, stock)) {
+      return NextResponse.json({ error: 'Title, price, and stock are required. Price and stock must be positive.' }, { status: 400 });
+    }
+    if (
+      (categoryValue !== null && typeof categoryValue !== 'string') ||
+      (category !== null && !BOOK_CATEGORIES.some(({ slug }) => slug === category)) ||
+      (rawIsBestseller !== null && rawIsBestseller !== 'true' && rawIsBestseller !== 'false')
+    ) {
+      return NextResponse.json({ error: 'Please choose a valid category and bestseller value.' }, { status: 400 });
     }
 
     const supabase = createSupabaseAdminClient();
@@ -101,7 +116,18 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
     const { error } = await supabase
       .from('books')
-      .update({ title, author, description, price, stock, isbn, cover_image_url })
+      .update({
+        title,
+        description,
+        price,
+        stock,
+        isbn,
+        cover_image_url,
+        category,
+        is_bestseller: isBestseller,
+        class_level: classLevel,
+        language,
+      })
       .eq('id', id);
 
     if (error) {

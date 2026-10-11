@@ -1,6 +1,7 @@
 import { BookOpen, Globe, PenLine, ShieldCheck, Users } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { BOOK_CATEGORIES } from '@/lib/categories';
 import { supabase } from '@/lib/supabase';
 
 const valueHighlights = [
@@ -32,37 +33,53 @@ const valueHighlights = [
 
 const departments = [
   {
+    slug: 'academic-textbooks',
     icon: BookOpen,
-    title: 'Academic Textbooks',
     description: 'Placeholder copy for clear, curriculum-focused books across school subjects.',
-    count: '6 titles',
     color: 'bg-blue-100 text-blue-800',
   },
   {
+    slug: 'workbooks',
     icon: PenLine,
-    title: 'Workbooks & Practice',
     description: 'Placeholder copy for activities and exercises that help learners build skills.',
-    count: '12 titles',
     color: 'bg-red-100 text-red-700',
   },
   {
+    slug: 'general-knowledge',
     icon: Globe,
-    title: 'General Knowledge',
     description: 'Placeholder copy for engaging reads that encourage curiosity beyond the classroom.',
-    count: '8 titles',
     color: 'bg-emerald-100 text-emerald-800',
+  },
+  {
+    slug: 'early-years',
+    icon: Users,
+    description: 'Placeholder copy for welcoming first steps in reading and learning.',
+    color: 'bg-amber-100 text-amber-800',
+  },
+  {
+    slug: 'exam-prep',
+    icon: ShieldCheck,
+    description: 'Placeholder copy for practice resources that help learners prepare with confidence.',
+    color: 'bg-indigo-100 text-indigo-800',
   },
 ];
 
 export default async function HomePage() {
   const { data, error } = await supabase
     .from('books')
-    .select('id, title, price, stock, cover_image_url')
+    .select('id, title, price, stock, cover_image_url, category, is_bestseller, class_level, language, created_at')
     .eq('is_active', true)
-    .order('created_at', { ascending: false })
-    .limit(4);
+    .order('created_at', { ascending: false });
 
-  const books = error ? [] : data ?? [];
+  const activeBooks = error ? [] : data ?? [];
+  const bestsellers = activeBooks.filter((book) => book.is_bestseller);
+  const books = (bestsellers.length > 0 ? bestsellers : activeBooks).slice(0, 4);
+  const categoryCounts = new Map(
+    BOOK_CATEGORIES.map(({ slug }) => [
+      slug,
+      activeBooks.filter((book) => book.category === slug).length,
+    ]),
+  );
 
   return (
     <main className="w-full">
@@ -199,9 +216,11 @@ export default async function HomePage() {
                     sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 260px"
                     className="object-cover transition-transform group-hover:scale-[1.02]"
                   />
-                  <span className="absolute left-3 top-3 rounded-full bg-blue-900 px-3 py-1 text-xs font-semibold text-white">
-                    Bestseller
-                  </span>
+                  {book.is_bestseller && (
+                    <span className="absolute left-3 top-3 rounded-full bg-blue-900 px-3 py-1 text-xs font-semibold text-white">
+                      Bestseller
+                    </span>
+                  )}
                 </div>
                 <div className="p-3 sm:p-4">
                   <h3 className="truncate font-semibold text-slate-900">{book.title}</h3>
@@ -289,24 +308,36 @@ export default async function HomePage() {
         </div>
 
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 lg:gap-6">
-          {departments.map(({ icon: Icon, title, description, count, color }) => (
-            <Link
-              key={title}
-              href="/shop"
-              className="group flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-lg sm:p-7"
-            >
-              <span className={`flex h-12 w-12 items-center justify-center rounded-full ${color}`}>
-                <Icon aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
-              </span>
-              <h3 className="mt-5 font-heading text-xl font-semibold text-blue-950 group-hover:text-brand-blue">
-                {title}
-              </h3>
-              <p className="mt-2 flex-1 text-sm leading-6 text-slate-600">{description}</p>
-              <span className="mt-5 inline-flex w-fit rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-900">
-                {count}
-              </span>
-            </Link>
-          ))}
+          {BOOK_CATEGORIES.map(({ slug, label }) => {
+            const department = departments.find((item) => item.slug === slug);
+            if (!department) {
+              return null;
+            }
+
+            const { icon: Icon, description, color } = department;
+            const count = categoryCounts.get(slug) ?? 0;
+
+            return (
+              <Link
+                key={slug}
+                href={`/shop?category=${slug}`}
+                className="group flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-lg sm:p-7"
+              >
+                <span className={`flex h-12 w-12 items-center justify-center rounded-full ${color}`}>
+                  <Icon aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
+                </span>
+                <h3 className="mt-5 font-heading text-xl font-semibold text-blue-950 group-hover:text-brand-blue">
+                  {label}
+                </h3>
+                <p className="mt-2 flex-1 text-sm leading-6 text-slate-600">{description}</p>
+                {count > 0 && (
+                  <span className="mt-5 inline-flex w-fit rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-900">
+                    {count} {count === 1 ? 'title' : 'titles'}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
         </div>
       </section>
 
