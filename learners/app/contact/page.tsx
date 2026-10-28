@@ -1,5 +1,5 @@
 // The address, phones, emails, hours, and card copy are placeholders to be replaced with real business details.
-import { Building2, Clock3, Mail, MapPin, Phone, Truck } from 'lucide-react';
+import { Building2, Clock3, Mail, MapPin, Phone } from 'lucide-react';
 import ContactForm from './contact-form';
 
 type ContactPageProps = {
@@ -88,17 +88,6 @@ export default async function ContactPage({ searchParams }: ContactPageProps) {
               <p className="mt-2 text-sm leading-7 text-slate-600">
                 Get in touch with our team about school, library, and distributor orders. We are
                 happy to help you find the right books for your community.
-              </p>
-            </div>
-
-            <div className="rounded-2xl bg-white p-6 shadow-sm shadow-slate-900/5 sm:p-7">
-              <Truck aria-hidden="true" className="h-7 w-7 text-brand-red" strokeWidth={1.8} />
-              <h2 className="mt-4 font-heading text-xl font-semibold text-blue-950">
-                Despatch &amp; delivery
-              </h2>
-              <p className="mt-2 text-sm leading-7 text-slate-600">
-                Our team prepares orders with care and will share helpful updates as your books
-                make their way to you.
               </p>
             </div>
           </aside>

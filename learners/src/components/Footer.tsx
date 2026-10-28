@@ -4,7 +4,7 @@ import { Clock, Mail, MapPin, Phone } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BOOK_CATEGORIES } from '@/lib/categories';
+import { SUBJECT_CATEGORIES } from '@/lib/categories';
 
 const companyLinks = [
   { href: '/', label: 'Home' },
@@ -56,13 +56,18 @@ export default function Footer() {
         <div>
           <h2 className="font-heading text-base font-semibold text-blue-900">Departments</h2>
           <ul className="mt-4 space-y-3">
-            {BOOK_CATEGORIES.map(({ slug, label }) => (
+            {SUBJECT_CATEGORIES.map(({ slug, label }) => (
               <li key={slug}>
-                <Link href={`/shop?category=${slug}`} className="text-sm text-slate-600 transition-colors hover:text-brand-red">
+                <Link href={`/shop?subject=${slug}`} className="text-sm text-slate-600 transition-colors hover:text-brand-red">
                   {label}
                 </Link>
               </li>
             ))}
+            <li>
+              <Link href="/shop" className="text-sm text-slate-600 transition-colors hover:text-brand-red">
+                All books
+              </Link>
+            </li>
           </ul>
         </div>
 

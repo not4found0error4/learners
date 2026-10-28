@@ -1,13 +1,21 @@
 import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { hasAuthenticatedAdminSession } from '@/lib/adminAuth';
-import { BOOK_CATEGORIES } from '@/lib/categories';
+import { isValidCategorySlug } from '@/lib/categories';
 import { createSupabaseAdminClient } from '@/lib/supabaseAdmin';
 
 const BUCKET_NAME = 'book-covers';
 
-function invalidBookInput(title: string, price: number, stock: number) {
-  return !title || !Number.isFinite(price) || price <= 0 || !Number.isFinite(stock) || stock <= 0;
+function invalidBookInput(title: string, price: number, stock: number, weightGrams: number) {
+  return (
+    !title ||
+    !Number.isFinite(price) ||
+    price <= 0 ||
+    !Number.isFinite(stock) ||
+    stock <= 0 ||
+    !Number.isInteger(weightGrams) ||
+    weightGrams <= 0
+  );
 }
 
 async function ensureBookCoversBucket(supabase: ReturnType<typeof createSupabaseAdminClient>) {
@@ -51,7 +59,10 @@ export async function GET(request: NextRequest) {
   }
 
   const supabase = createSupabaseAdminClient();
-  const { data, error } = await supabase.from('books').select('*').order('created_at', { ascending: false });
+  const { data, error } = await supabase
+    .from('books')
+    .select('id, title, description, price, stock, weight_grams, isbn, cover_image_url, categories, is_bestseller, class_level, language, is_active')
+    .order('created_at', { ascending: false });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -71,27 +82,29 @@ export async function POST(request: NextRequest) {
     const description = String(formData.get('description') || '').trim();
     const price = Number(formData.get('price'));
     const stock = Number(formData.get('stock'));
+    const weightGrams = Number(formData.get('weight_grams'));
     const isbn = String(formData.get('isbn') || '').trim() || null;
     const coverImageUrl = String(formData.get('coverImageUrl') || '').trim();
-    const categoryValue = formData.get('category');
+    const categories = Array.from(new Set(
+      formData.getAll('categories').filter(
+        (value): value is string => typeof value === 'string' && isValidCategorySlug(value),
+      ),
+    ));
     const rawIsBestseller = formData.get('is_bestseller');
     const classLevelValue = formData.get('class_level');
     const languageValue = formData.get('language');
     const coverFile = formData.get('coverFile');
-    const category = typeof categoryValue === 'string' ? categoryValue.trim() || null : null;
     const isBestseller = rawIsBestseller === 'true';
     const classLevel = typeof classLevelValue === 'string' ? classLevelValue.trim() || null : null;
     const language = typeof languageValue === 'string' ? languageValue.trim() || 'English' : 'English';
 
-    if (invalidBookInput(title, price, stock)) {
-      return NextResponse.json({ error: 'Title, price, and stock are required. Price and stock must be positive.' }, { status: 400 });
+    if (invalidBookInput(title, price, stock, weightGrams)) {
+      return NextResponse.json({ error: 'Title, price, stock, and weight are required. Price, stock, and weight must be positive, with weight a whole number.' }, { status: 400 });
     }
     if (
-      (categoryValue !== null && typeof categoryValue !== 'string') ||
-      (category !== null && !BOOK_CATEGORIES.some(({ slug }) => slug === category)) ||
       (rawIsBestseller !== null && rawIsBestseller !== 'true' && rawIsBestseller !== 'false')
     ) {
-      return NextResponse.json({ error: 'Please choose a valid category and bestseller value.' }, { status: 400 });
+      return NextResponse.json({ error: 'Please choose a valid bestseller value.' }, { status: 400 });
     }
 
     const supabase = createSupabaseAdminClient();
@@ -107,9 +120,10 @@ export async function POST(request: NextRequest) {
         description,
         price,
         stock,
+        weight_grams: weightGrams,
         isbn,
         cover_image_url,
-        category,
+        categories,
         is_bestseller: isBestseller,
         class_level: classLevel,
         language,

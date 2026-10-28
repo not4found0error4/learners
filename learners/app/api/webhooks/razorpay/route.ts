@@ -7,13 +7,6 @@ import {
 } from '@/lib/email';
 import { createSupabaseAdminClient } from '@/lib/supabaseAdmin';
 
-type CartItem = {
-  id: string;
-  title?: string;
-  price: number;
-  quantity: number;
-};
-
 type RazorpayPayload = {
   event?: string;
   payload?: {
@@ -22,7 +15,6 @@ type RazorpayPayload = {
         id?: string;
         order_id?: string;
         amount?: number;
-        notes?: Record<string, string>;
       };
     };
   };
@@ -37,34 +29,6 @@ function isValidSignature(body: string, signature: string, secret: string) {
     expectedBuffer.length === receivedBuffer.length &&
     timingSafeEqual(expectedBuffer, receivedBuffer)
   );
-}
-
-function parseCartItems(value: string | undefined): CartItem[] {
-  if (!value) {
-    throw new Error('Webhook notes do not contain cart items.');
-  }
-
-  const parsed: unknown = JSON.parse(value);
-
-  if (!Array.isArray(parsed)) {
-    throw new Error('Webhook cart items must be an array.');
-  }
-
-  return parsed.map((item) => {
-    if (
-      typeof item !== 'object' ||
-      item === null ||
-      typeof item.id !== 'string' ||
-      typeof item.price !== 'number' ||
-      typeof item.quantity !== 'number' ||
-      !Number.isInteger(item.quantity) ||
-      item.quantity <= 0
-    ) {
-      throw new Error('Webhook contains an invalid cart item.');
-    }
-
-    return item as CartItem;
-  });
 }
 
 export async function POST(request: Request) {
@@ -85,99 +49,111 @@ export async function POST(request: Request) {
     }
 
     const payment = payload.payload?.payment?.entity;
-    const notes = payment?.notes;
 
-    if (!payment?.id || !payment.order_id || typeof payment.amount !== 'number' || !notes) {
+    if (!payment?.id || !payment.order_id || typeof payment.amount !== 'number') {
       throw new Error('Captured payment payload is missing required fields.');
     }
 
-    const cartItems = parseCartItems(notes.cart_items);
     const adminSupabase = createSupabaseAdminClient();
 
-    console.log('[razorpay webhook] Checking for an existing order.');
-    const { data: existingOrder, error: existingOrderError } = await adminSupabase
+    console.log('[razorpay webhook] Looking up order:', payment.order_id);
+    const { data: order, error: orderLookupError } = await adminSupabase
       .from('orders')
-      .select('id')
+      .select(
+        'id, status, customer_id, total_amount, subtotal_amount, shipping_amount, total_weight_grams',
+      )
       .eq('razorpay_order_id', payment.order_id)
       .maybeSingle();
 
-    if (existingOrderError) {
-      console.error('[razorpay webhook] Failed to check existing order:', existingOrderError);
-      throw existingOrderError;
+    if (orderLookupError) {
+      console.error('[razorpay webhook] Failed to find order:', orderLookupError);
+      throw orderLookupError;
     }
 
-    if (existingOrder) {
-      console.log('[razorpay webhook] Order already processed:', payment.order_id);
+    if (!order) {
+      console.error('[razorpay webhook] No order found for captured payment:', payment.order_id);
       return Response.json({ received: true });
     }
 
-    console.log('[razorpay webhook] Inserting customer.');
-    const { data: customer, error: customerError } = await adminSupabase
-      .from('customers')
-      .insert({
-        name: notes.customer_name,
-        email: notes.customer_email,
-        phone: notes.customer_phone,
-        address: notes.address,
-        city: notes.city,
-        state: notes.state,
-        pincode: notes.pincode,
-      })
-      .select('id')
-      .single();
-
-    if (customerError || !customer) {
-      console.error('[razorpay webhook] Failed to insert customer:', customerError);
-      throw customerError || new Error('Customer insert returned no row.');
+    if (order.status !== 'awaiting_payment') {
+      console.log(
+        '[razorpay webhook] Order already processed or not awaiting payment:',
+        payment.order_id,
+        order.status,
+      );
+      return Response.json({ received: true });
     }
 
-    console.log('[razorpay webhook] Inserting order.');
-    const { data: order, error: orderError } = await adminSupabase
-      .from('orders')
-      .insert({
-        customer_id: customer.id,
-        total_amount: payment.amount / 100,
-        status: 'paid',
-        razorpay_order_id: payment.order_id,
-        razorpay_payment_id: payment.id,
-      })
-      .select('id')
-      .single();
+    const totalAmount = Number(order.total_amount);
+    const expectedAmountPaise = Math.round(totalAmount * 100);
 
-    if (orderError || !order) {
-      console.error('[razorpay webhook] Failed to insert order:', orderError);
-      throw orderError || new Error('Order insert returned no row.');
-    }
-
-    for (const item of cartItems) {
-      console.log('[razorpay webhook] Inserting order item:', item.id);
-      const { error: itemError } = await adminSupabase.from('order_items').insert({
-        order_id: order.id,
-        book_id: item.id,
-        quantity: item.quantity,
-        price_at_purchase: item.price,
+    if (payment.amount !== expectedAmountPaise) {
+      console.warn('[razorpay webhook] PAYMENT AMOUNT MISMATCH; processing captured payment:', {
+        orderId: order.id,
+        razorpayOrderId: payment.order_id,
+        expectedAmountPaise,
+        capturedAmountPaise: payment.amount,
       });
+    }
 
-      if (itemError) {
-        console.error('[razorpay webhook] Failed to insert order item:', itemError);
-        throw itemError;
-      }
+    const [customerResult, itemsResult] = await Promise.all([
+      adminSupabase
+        .from('customers')
+        .select('name, email, phone, address, city, state, pincode')
+        .eq('id', order.customer_id)
+        .maybeSingle(),
+      adminSupabase
+        .from('order_items')
+        .select('book_id, quantity, price_at_purchase, books(title)')
+        .eq('order_id', order.id),
+    ]);
 
-      console.log('[razorpay webhook] Decrementing stock:', item.id);
+    if (customerResult.error || !customerResult.data) {
+      console.error('[razorpay webhook] Failed to load order customer:', customerResult.error);
+      throw customerResult.error || new Error('Order customer was not found.');
+    }
+
+    if (itemsResult.error || !itemsResult.data?.length) {
+      console.error('[razorpay webhook] Failed to load order items:', itemsResult.error);
+      throw itemsResult.error || new Error('Order has no saved items.');
+    }
+
+    const { data: claimedOrder, error: claimError } = await adminSupabase
+      .from('orders')
+      .update({ status: 'paid', razorpay_payment_id: payment.id })
+      .eq('id', order.id)
+      .eq('status', 'awaiting_payment')
+      .select('id')
+      .maybeSingle();
+
+    if (claimError) {
+      console.error('[razorpay webhook] Failed to mark order paid:', claimError);
+      throw claimError;
+    }
+
+    if (!claimedOrder) {
+      console.log('[razorpay webhook] Order was already claimed by another delivery:', payment.order_id);
+      return Response.json({ received: true });
+    }
+
+    for (const item of itemsResult.data) {
       const { data: book, error: bookError } = await adminSupabase
         .from('books')
-        .select('stock')
-        .eq('id', item.id)
-        .single();
+        .select('title, stock')
+        .eq('id', item.book_id)
+        .maybeSingle();
 
       if (bookError || !book) {
-        console.error('[razorpay webhook] Failed to read book stock:', bookError);
-        throw bookError || new Error(`Book not found: ${item.id}`);
+        console.warn(
+          `[razorpay webhook] Could not read stock for book ${item.book_id}; payment remains processed:`,
+          bookError,
+        );
+        continue;
       }
 
       if (book.stock < item.quantity) {
         console.warn(
-          `[razorpay webhook] Insufficient stock for book ${item.id}; order item was saved.`,
+          `[razorpay webhook] Insufficient stock for "${book.title}" (${item.book_id}); payment remains processed.`,
         );
         continue;
       }
@@ -185,42 +161,57 @@ export async function POST(request: Request) {
       const { data: updatedBook, error: stockError } = await adminSupabase
         .from('books')
         .update({ stock: book.stock - item.quantity })
-        .eq('id', item.id)
+        .eq('id', item.book_id)
+        .eq('stock', book.stock)
         .gte('stock', item.quantity)
         .select('id')
         .maybeSingle();
 
       if (stockError) {
-        console.error('[razorpay webhook] Failed to decrement book stock:', stockError);
-        throw stockError;
-      }
-
-      if (!updatedBook) {
         console.warn(
-          `[razorpay webhook] Stock changed before decrementing book ${item.id}; order item was saved.`,
+          `[razorpay webhook] Failed to decrement stock for "${book.title}" (${item.book_id}); payment remains processed:`,
+          stockError,
+        );
+      } else if (!updatedBook) {
+        console.warn(
+          `[razorpay webhook] Stock changed before decrementing "${book.title}" (${item.book_id}); payment remains processed.`,
         );
       }
     }
 
+    const customer = customerResult.data;
+    const emailItems = itemsResult.data.map((item) => {
+      const bookRelation = item.books;
+      const book = Array.isArray(bookRelation) ? bookRelation[0] : bookRelation;
+
+      return {
+        title: book?.title || 'Book',
+        price: Number(item.price_at_purchase),
+        quantity: item.quantity,
+      };
+    });
+    const subtotal = Number(order.subtotal_amount);
+    const shipping = Number(order.shipping_amount);
+    const totalWeightGrams = Number(order.total_weight_grams);
+    const summary = {
+      subtotal,
+      shipping,
+      billedKg:
+        emailItems.length > 0 ? Math.max(1, Math.ceil(totalWeightGrams / 1000)) : 0,
+      total: totalAmount,
+    };
     const orderId = String(order.id);
-    const totalAmount = payment.amount / 100;
-    const shippingAddress = [notes.address, notes.city, notes.state, notes.pincode]
+    const shippingAddress = [customer.address, customer.city, customer.state, customer.pincode]
       .filter(Boolean)
       .join(', ');
 
     try {
       await sendEmail(
-        notes.customer_email,
+        customer.email,
         `Order confirmation - ${orderId}`,
-        buildOrderConfirmationEmail(
-          notes.customer_name,
-          orderId,
-          cartItems,
-          totalAmount,
-          shippingAddress,
-        ),
+        buildOrderConfirmationEmail(customer.name, orderId, emailItems, summary, shippingAddress),
       );
-      console.log('[razorpay webhook] Customer confirmation email sent:', notes.customer_email);
+      console.log('[razorpay webhook] Customer confirmation email sent:', customer.email);
     } catch (error) {
       console.error('[razorpay webhook] Customer confirmation email failed:', error);
     }
@@ -229,7 +220,7 @@ export async function POST(request: Request) {
       await sendEmail(
         ADMIN_EMAIL,
         `New order received - ${orderId}`,
-        buildAdminOrderNotificationEmail(notes.customer_name, orderId, cartItems, totalAmount),
+        buildAdminOrderNotificationEmail(customer.name, orderId, emailItems, summary),
       );
       console.log('[razorpay webhook] Admin notification email sent:', ADMIN_EMAIL);
     } catch (error) {

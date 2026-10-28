@@ -1,18 +1,12 @@
 // The catalogue heading and introduction are placeholder copy.
+import { Suspense } from 'react';
 import { supabase } from '@/lib/supabase';
 import ShopCatalog, { type ShopBook } from '@/components/ShopCatalog';
 
-type ShopPageProps = {
-  searchParams: Promise<{ category?: string | string[] }>;
-};
-
-export default async function ShopPage({ searchParams }: ShopPageProps) {
-  const { category } = await searchParams;
-  const initialCategory = Array.isArray(category) ? category[0] ?? '' : category ?? '';
-
+export default async function ShopPage() {
   const { data, error } = await supabase
     .from('books')
-    .select('id, title, price, stock, cover_image_url, category, is_bestseller, class_level, language, created_at')
+    .select('id, title, price, stock, weight_grams, cover_image_url, categories, is_bestseller, class_level, language, created_at')
     .eq('is_active', true)
     .order('created_at', { ascending: false });
 
@@ -35,7 +29,9 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
             classrooms at every stage.
           </p>
         </header>
-        <ShopCatalog books={(data ?? []) as ShopBook[]} initialCategory={initialCategory} />
+        <Suspense fallback={null}>
+          <ShopCatalog books={(data ?? []) as ShopBook[]} />
+        </Suspense>
       </section>
     </main>
   );

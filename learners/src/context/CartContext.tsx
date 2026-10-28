@@ -7,10 +7,22 @@ export type CartItem = {
   title: string;
   price: number;
   cover_image_url: string | null;
+  weight_grams: number | null;
   quantity: number;
 };
 
 export type CartBook = Omit<CartItem, 'quantity'>;
+
+export type CheckoutDetails = {
+  fullName: string;
+  email: string;
+  phone: string;
+  addressLine: string;
+  city: string;
+  state: string;
+  pincode: string;
+  landmark: string;
+};
 
 type CartContextValue = {
   items: CartItem[];
@@ -18,14 +30,30 @@ type CartContextValue = {
   removeFromCart: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => void;
   clearCart: () => void;
+  checkoutDetails: CheckoutDetails;
+  setCheckoutDetails: (details: CheckoutDetails) => void;
+  clearCheckoutDetails: () => void;
   totalItems: number;
   totalPrice: number;
 };
 
 const CartContext = createContext<CartContextValue | undefined>(undefined);
 
+const initialCheckoutDetails: CheckoutDetails = {
+  fullName: '',
+  email: '',
+  phone: '',
+  addressLine: '',
+  city: '',
+  state: '',
+  pincode: '',
+  landmark: '',
+};
+
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
+  const [checkoutDetails, setCheckoutDetails] =
+    useState<CheckoutDetails>(initialCheckoutDetails);
 
   function addToCart(book: CartBook) {
     setItems((currentItems) => {
@@ -64,6 +92,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setItems([]);
   }
 
+  function clearCheckoutDetails() {
+    setCheckoutDetails(initialCheckoutDetails);
+  }
+
   const totalItems = items.reduce((total, item) => total + item.quantity, 0);
   const totalPrice = items.reduce(
     (total, item) => total + item.price * item.quantity,
@@ -78,6 +110,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
         removeFromCart,
         updateQuantity,
         clearCart,
+        checkoutDetails,
+        setCheckoutDetails,
+        clearCheckoutDetails,
         totalItems,
         totalPrice,
       }}

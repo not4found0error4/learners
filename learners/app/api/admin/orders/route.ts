@@ -16,6 +16,8 @@ export async function GET(request: NextRequest) {
 
   if (status && status !== 'all') {
     query = query.eq('status', status);
+  } else {
+    query = query.neq('status', 'awaiting_payment');
   }
 
   const { data, error } = await query;
@@ -25,7 +27,8 @@ export async function GET(request: NextRequest) {
 
   const { data: summaryOrders, error: summaryError } = await supabase
     .from('orders')
-    .select('status');
+    .select('status')
+    .neq('status', 'awaiting_payment');
   if (summaryError) {
     return NextResponse.json({ error: summaryError.message }, { status: 500 });
   }

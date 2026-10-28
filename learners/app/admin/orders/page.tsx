@@ -11,8 +11,9 @@ type Order = {
   customers: { name: string } | { name: string }[] | null;
 };
 
-const statuses = ['all', 'pending', 'paid', 'packed', 'shipped', 'delivered', 'cancelled'];
+const statuses = ['all', 'awaiting_payment', 'pending', 'paid', 'packed', 'shipped', 'delivered', 'cancelled'];
 const statusStyles: Record<string, string> = {
+  awaiting_payment: 'bg-amber-100 text-amber-800',
   pending: 'bg-yellow-100 text-yellow-800',
   paid: 'bg-blue-100 text-blue-800',
   packed: 'bg-orange-100 text-orange-800',
@@ -20,6 +21,10 @@ const statusStyles: Record<string, string> = {
   delivered: 'bg-green-100 text-green-800',
   cancelled: 'bg-red-100 text-red-800',
 };
+
+function statusLabel(status: string) {
+  return status.split('_').map((part) => part[0].toUpperCase() + part.slice(1)).join(' ');
+}
 
 function customerName(order: Order) {
   return Array.isArray(order.customers) ? order.customers[0]?.name : order.customers?.name || 'Unknown customer';
@@ -63,7 +68,7 @@ export default function AdminOrdersPage() {
           </div>
           <label className="text-sm font-medium">Filter status
             <select value={filter} onChange={(event) => { setIsLoading(true); setFilter(event.target.value); }} className="ml-2 rounded border bg-white px-3 py-2">
-              {statuses.map((status) => <option key={status} value={status}>{status === 'all' ? 'All' : status[0].toUpperCase() + status.slice(1)}</option>)}
+              {statuses.map((status) => <option key={status} value={status}>{status === 'all' ? 'All' : statusLabel(status)}</option>)}
             </select>
           </label>
         </div>

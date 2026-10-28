@@ -4,9 +4,20 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Minus, Plus, ShoppingCart, Trash2 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
+import { calculateShipping, SHIPPING_RATE_PER_KG } from '@/lib/shipping';
 
 export default function CartPage() {
   const { items, removeFromCart, updateQuantity, totalItems, totalPrice } = useCart();
+  const shippingItems = items.flatMap((item) =>
+    item.weight_grams == null
+      ? []
+      : [{ weight_grams: item.weight_grams, quantity: item.quantity }],
+  );
+  const shippingEstimate =
+    shippingItems.length === items.length ? calculateShipping(shippingItems) : null;
+  const estimatedTotal = shippingEstimate
+    ? totalPrice + shippingEstimate.shippingAmount
+    : null;
 
   return (
     <main className="w-full">
@@ -128,15 +139,30 @@ export default function CartPage() {
                   Order summary
                 </h2>
                 <div className="mt-6 flex items-start justify-between gap-3 border-b border-slate-100 pb-5 text-sm">
-                  <span className="text-slate-600">
-                    Subtotal ({totalItems} {totalItems === 1 ? 'item' : 'items'})
-                  </span>
+                  <span className="text-slate-600">Subtotal ({totalItems} {totalItems === 1 ? 'item' : 'items'})</span>
+                  <span className="shrink-0 font-semibold text-blue-950">₹{totalPrice.toFixed(2)}</span>
+                </div>
+                <div className="flex items-start justify-between gap-3 border-b border-slate-100 py-5 text-sm">
+                  <div>
+                    <p className="text-slate-600">Delivery charge</p>
+                    {shippingEstimate ? (
+                      <p className="mt-1 text-xs text-slate-500">
+                        {(shippingEstimate.totalGrams / 1000).toLocaleString(undefined, { maximumFractionDigits: 2 })} kg, billed as {shippingEstimate.billedKg} kg at ₹{SHIPPING_RATE_PER_KG}/kg
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-xs text-slate-500">Calculated at checkout</p>
+                    )}
+                  </div>
                   <span className="shrink-0 font-semibold text-blue-950">
-                    ₹{totalPrice.toFixed(2)}
+                    {shippingEstimate ? `₹${shippingEstimate.shippingAmount.toFixed(2)}` : 'Calculated at checkout'}
                   </span>
                 </div>
-                <p className="mt-5 text-sm leading-6 text-slate-500">
-                  Delivery details are collected at checkout.
+                <div className="flex items-center justify-between gap-3 pt-5 font-heading font-bold text-blue-950">
+                  <span>Total</span>
+                  <span>{estimatedTotal === null ? 'Calculated at checkout' : `₹${estimatedTotal.toFixed(2)}`}</span>
+                </div>
+                <p className="mt-2 text-xs text-slate-500">
+                  Final delivery charge is confirmed at checkout.
                 </p>
                 <Link
                   className="mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-brand-red px-6 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-red-700"

@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { BOOK_CATEGORIES } from '@/lib/categories';
+import { isValidCategorySlug, LEVEL_CATEGORIES, SUBJECT_CATEGORIES } from '@/lib/categories';
 
 export type AdminBook = {
   id?: string;
@@ -10,9 +10,10 @@ export type AdminBook = {
   description: string | null;
   price: number;
   stock: number;
+  weight_grams: number | null;
   isbn: string | null;
   cover_image_url: string | null;
-  category: string | null;
+  categories: string[];
   is_bestseller: boolean;
   class_level: string | null;
   language: string;
@@ -28,9 +29,14 @@ export default function BookForm({ book }: BookFormProps) {
   const [description, setDescription] = useState(book?.description || '');
   const [price, setPrice] = useState(book ? String(book.price) : '');
   const [stock, setStock] = useState(book ? String(book.stock) : '');
+  const [weightGrams, setWeightGrams] = useState(
+    book?.weight_grams != null ? String(book.weight_grams) : '',
+  );
   const [isbn, setIsbn] = useState(book?.isbn || '');
   const [coverImageUrl, setCoverImageUrl] = useState(book?.cover_image_url || '');
-  const [category, setCategory] = useState(book?.category || '');
+  const [categories, setCategories] = useState<string[]>(() =>
+    (book?.categories ?? []).filter(isValidCategorySlug),
+  );
   const [isBestseller, setIsBestseller] = useState(book?.is_bestseller ?? false);
   const [classLevel, setClassLevel] = useState(book?.class_level || '');
   const [language, setLanguage] = useState(book?.language || 'English');
@@ -38,14 +44,31 @@ export default function BookForm({ book }: BookFormProps) {
   const [errorMessage, setErrorMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
+  function toggleCategory(slug: string) {
+    setCategories((currentCategories) =>
+      currentCategories.includes(slug)
+        ? currentCategories.filter((category) => category !== slug)
+        : [...currentCategories, slug],
+    );
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setErrorMessage('');
 
     const numericPrice = Number(price);
     const numericStock = Number(stock);
-    if (!title.trim() || !Number.isFinite(numericPrice) || numericPrice <= 0 || !Number.isFinite(numericStock) || numericStock <= 0) {
-      setErrorMessage('Title, price, and stock are required. Price and stock must be positive.');
+    const numericWeightGrams = Number(weightGrams);
+    if (
+      !title.trim() ||
+      !Number.isFinite(numericPrice) ||
+      numericPrice <= 0 ||
+      !Number.isFinite(numericStock) ||
+      numericStock <= 0 ||
+      !Number.isInteger(numericWeightGrams) ||
+      numericWeightGrams <= 0
+    ) {
+      setErrorMessage('Title, price, stock, and weight are required. Price, stock, and weight must be positive, with weight a whole number.');
       return;
     }
 
@@ -55,9 +78,10 @@ export default function BookForm({ book }: BookFormProps) {
     formData.set('description', description.trim());
     formData.set('price', String(numericPrice));
     formData.set('stock', String(numericStock));
+    formData.set('weight_grams', String(numericWeightGrams));
     formData.set('isbn', isbn.trim());
     formData.set('coverImageUrl', coverImageUrl.trim());
-    formData.set('category', category);
+    categories.filter(isValidCategorySlug).forEach((slug) => formData.append('categories', slug));
     formData.set('is_bestseller', String(isBestseller));
     formData.set('class_level', classLevel.trim());
     formData.set('language', language.trim() || 'English');
@@ -102,32 +126,61 @@ export default function BookForm({ book }: BookFormProps) {
         </label>
       </div>
       <label className="block">
+        <span className="mb-1 block text-sm font-medium">Weight (grams) *</span>
+        <input
+          required
+          min="1"
+          step="1"
+          type="number"
+          value={weightGrams}
+          onChange={(event) => setWeightGrams(event.target.value)}
+          className="w-full rounded border px-3 py-2"
+        />
+        <span className="mt-1 block text-xs text-gray-500">Weight of one copy in grams, used to calculate delivery</span>
+      </label>
+      <label className="block">
         <span className="mb-1 block text-sm font-medium">ISBN</span>
         <input value={isbn} onChange={(event) => setIsbn(event.target.value)} className="w-full rounded border px-3 py-2" />
       </label>
-      <div className="grid gap-5 sm:grid-cols-2">
-        <label className="block">
-          <span className="mb-1 block text-sm font-medium">Category</span>
-          <select
-            value={category}
-            onChange={(event) => setCategory(event.target.value)}
-            className="w-full rounded border bg-white px-3 py-2"
-          >
-            <option value="">No category</option>
-            {BOOK_CATEGORIES.map(({ slug, label }) => (
-              <option key={slug} value={slug}>{label}</option>
-            ))}
-          </select>
-        </label>
-        <label className="flex items-center gap-2 self-end pb-2 text-sm font-medium">
+      <div className="space-y-4">
+        {[
+          { label: 'Level', options: LEVEL_CATEGORIES },
+          { label: 'Subject', options: SUBJECT_CATEGORIES },
+        ].map(({ label, options }) => (
+          <fieldset key={label}>
+            <legend className="mb-2 text-sm font-medium">{label}</legend>
+            <div className="flex flex-wrap gap-2">
+              {options.map(({ slug, label: optionLabel }) => {
+                const selected = categories.includes(slug);
+                return (
+                  <button
+                    key={slug}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => toggleCategory(slug)}
+                    className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                      selected
+                        ? 'border-blue-800 bg-blue-800 text-white'
+                        : 'border-gray-300 bg-white text-gray-700 hover:border-blue-500'
+                    }`}
+                  >
+                    {optionLabel}
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
+        ))}
+        <p className="text-xs text-gray-500">Choose any levels and subjects that apply.</p>
+      </div>
+      <label className="flex items-center gap-2 text-sm font-medium">
           <input
             checked={isBestseller}
             onChange={(event) => setIsBestseller(event.target.checked)}
             type="checkbox"
           />
           Mark as bestseller
-        </label>
-      </div>
+      </label>
       <div className="grid gap-5 sm:grid-cols-2">
         <label className="block">
           <span className="mb-1 block text-sm font-medium">Class / level</span>

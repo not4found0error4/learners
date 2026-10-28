@@ -1,7 +1,7 @@
-import { BookOpen, Globe, PenLine, ShieldCheck, Users } from 'lucide-react';
+import { BookOpen, Calculator, Globe, PenLine, ShieldCheck, Sparkles, Users } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { BOOK_CATEGORIES } from '@/lib/categories';
+import { BOOK_CATEGORIES, LEVEL_CATEGORIES, SUBJECT_CATEGORIES } from '@/lib/categories';
 import { supabase } from '@/lib/supabase';
 
 const valueHighlights = [
@@ -33,61 +33,64 @@ const valueHighlights = [
 
 const departments = [
   {
-    slug: 'academic-textbooks',
+    slug: 'maths',
+    icon: Calculator,
+    description: 'Books and activities for building mathematical skills.',
+    color: 'bg-indigo-100 text-indigo-800',
+  },
+  {
+    slug: 'english',
     icon: BookOpen,
-    description: 'Placeholder copy for clear, curriculum-focused books across school subjects.',
+    description: 'Reading and learning resources in English.',
     color: 'bg-blue-100 text-blue-800',
   },
   {
-    slug: 'workbooks',
-    icon: PenLine,
-    description: 'Placeholder copy for activities and exercises that help learners build skills.',
-    color: 'bg-red-100 text-red-700',
-  },
-  {
-    slug: 'general-knowledge',
-    icon: Globe,
-    description: 'Placeholder copy for engaging reads that encourage curiosity beyond the classroom.',
-    color: 'bg-emerald-100 text-emerald-800',
-  },
-  {
-    slug: 'early-years',
+    slug: 'hindi',
     icon: Users,
-    description: 'Placeholder copy for welcoming first steps in reading and learning.',
+    description: 'Reading and learning resources in Hindi.',
     color: 'bg-amber-100 text-amber-800',
   },
   {
-    slug: 'exam-prep',
-    icon: ShieldCheck,
-    description: 'Placeholder copy for practice resources that help learners prepare with confidence.',
-    color: 'bg-indigo-100 text-indigo-800',
+    slug: 'gk',
+    icon: Globe,
+    description: 'Books that encourage curiosity about the world.',
+    color: 'bg-emerald-100 text-emerald-800',
+  },
+  {
+    slug: 'others',
+    icon: Sparkles,
+    description: 'More books and resources to explore.',
+    color: 'bg-amber-100 text-amber-800',
+  },
+  {
+    slug: 'art',
+    icon: PenLine,
+    description: 'Creative titles and activities for young artists.',
+    color: 'bg-red-100 text-red-700',
   },
 ];
 
 export default async function HomePage() {
   const { data, error } = await supabase
     .from('books')
-    .select('id, title, price, stock, cover_image_url, category, is_bestseller, class_level, language, created_at')
+    .select('id, title, price, stock, cover_image_url, categories, is_bestseller, class_level, language, created_at')
     .eq('is_active', true)
     .order('created_at', { ascending: false });
 
   const activeBooks = error ? [] : data ?? [];
   const bestsellers = activeBooks.filter((book) => book.is_bestseller);
   const books = (bestsellers.length > 0 ? bestsellers : activeBooks).slice(0, 4);
-  const categoryCounts = new Map(
+  const categoryCounts = new Map<string, number>(
     BOOK_CATEGORIES.map(({ slug }) => [
       slug,
-      activeBooks.filter((book) => book.category === slug).length,
-    ]),
+      activeBooks.filter((book) => book.categories.includes(slug)).length,
+    ] as const),
   );
 
   return (
     <main className="w-full">
       <section className="mx-auto grid w-full max-w-7xl items-center gap-14 px-5 py-14 sm:px-8 sm:py-20 lg:grid-cols-[1.08fr_0.92fr] lg:gap-16 lg:px-10 lg:py-24">
         <div className="max-w-2xl">
-          <p className="mb-5 text-sm font-semibold uppercase text-brand-blue">
-            Learners Publications
-          </p>
           <h1 className="font-heading text-4xl font-bold leading-tight text-blue-950 sm:text-5xl">
             <span className="block">Knowledge that travels</span>
             <span className="block">
@@ -120,15 +123,15 @@ export default async function HomePage() {
 
           <div className="mt-12 grid max-w-xl grid-cols-3 gap-4 border-t border-slate-200 pt-7">
             <div>
-              <p className="font-heading text-3xl font-bold text-blue-900">40+</p>
+              <p className="font-heading text-3xl font-bold text-blue-900">15+</p>
               <p className="mt-1 text-sm leading-5 text-slate-500">Years of publishing</p>
             </div>
             <div>
-              <p className="font-heading text-3xl font-bold text-blue-900">1,200+</p>
+              <p className="font-heading text-3xl font-bold text-blue-900">175+</p>
               <p className="mt-1 text-sm leading-5 text-slate-500">Titles in print</p>
             </div>
             <div>
-              <p className="font-heading text-3xl font-bold text-blue-900">12</p>
+              <p className="font-heading text-3xl font-bold text-blue-900">15</p>
               <p className="mt-1 text-sm leading-5 text-slate-500">Learning categories</p>
             </div>
           </div>
@@ -202,35 +205,43 @@ export default async function HomePage() {
 
         {books.length > 0 ? (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-5 lg:grid-cols-4 lg:gap-6">
-            {books.map((book) => (
-              <Link
-                key={book.id}
-                href={`/books/${book.id}`}
-                className="group block overflow-hidden rounded-2xl border border-slate-200 bg-white transition-shadow hover:shadow-lg"
-              >
-                <div className="relative aspect-4/5 bg-slate-100">
-                  <Image
-                    src={book.cover_image_url || '/pattern-bg.png'}
-                    alt={book.title}
-                    fill
-                    sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 260px"
-                    className="object-cover transition-transform group-hover:scale-[1.02]"
-                  />
-                  {book.is_bestseller && (
-                    <span className="absolute left-3 top-3 rounded-full bg-blue-900 px-3 py-1 text-xs font-semibold text-white">
-                      Bestseller
-                    </span>
-                  )}
-                </div>
-                <div className="p-3 sm:p-4">
-                  <h3 className="truncate font-semibold text-slate-900">{book.title}</h3>
-                  <p className="mt-2 font-bold text-blue-950">₹{book.price}</p>
-                  {book.stock === 0 && (
-                    <span className="mt-1 inline-block text-xs text-red-600">Out of stock</span>
-                  )}
-                </div>
-              </Link>
-            ))}
+            {books.map((book) => {
+              const coverUrl = book.cover_image_url || '/pattern-bg.png';
+              const isSvgCover = /\.svg(?:[?#]|$)/i.test(coverUrl);
+
+              return (
+                <Link
+                  key={book.id}
+                  href={`/books/${book.id}`}
+                  className="group block overflow-hidden rounded-2xl border border-slate-200 bg-white transition-shadow hover:shadow-lg"
+                >
+                  <div className="relative aspect-4/5 bg-[#f3f1ed] p-4">
+                    <div className="relative flex h-full w-full items-center justify-center">
+                      <Image
+                        src={coverUrl}
+                        alt={book.title}
+                        fill
+                        sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 260px"
+                        unoptimized={isSvgCover}
+                        className="rounded-sm object-contain drop-shadow-lg transition-transform group-hover:scale-[1.02]"
+                      />
+                    </div>
+                    {book.is_bestseller && (
+                      <span className="absolute left-3 top-3 rounded-full bg-blue-900 px-3 py-1 text-xs font-semibold text-white">
+                        Bestseller
+                      </span>
+                    )}
+                  </div>
+                  <div className="p-3 sm:p-4">
+                    <h3 className="truncate font-semibold text-slate-900">{book.title}</h3>
+                    <p className="mt-2 font-bold text-blue-950">₹{book.price}</p>
+                    {book.stock === 0 && (
+                      <span className="mt-1 inline-block text-xs text-red-600">Out of stock</span>
+                    )}
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         ) : (
           <p className="rounded-2xl border border-slate-200 bg-white px-5 py-8 text-center text-sm text-slate-500">
@@ -246,81 +257,25 @@ export default async function HomePage() {
         </Link>
       </section>
 
-      <section className="border-t border-slate-100 bg-slate-50/70">
-        <div className="mx-auto grid w-full max-w-7xl items-center gap-10 px-5 py-14 sm:px-8 sm:py-16 lg:grid-cols-2 lg:gap-16 lg:px-10 lg:py-20">
-          <div className="relative mx-auto w-full max-w-lg">
-            <div className="relative aspect-4/5 overflow-hidden rounded-2xl bg-blue-900 shadow-xl shadow-blue-950/10">
-              <div
-                aria-hidden="true"
-                className="absolute inset-0 bg-[url('/pattern-bg.png')] bg-cover bg-center opacity-20"
-              />
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-8 text-center">
-                <span className="rounded-full border border-white/40 px-4 py-2 text-sm font-medium text-white/90">
-                  Image placeholder
-                </span>
-                <span className="max-w-xs font-heading text-2xl font-semibold leading-snug text-white sm:text-3xl">
-                  Thoughtful books for every learner
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="max-w-2xl">
-            <p className="text-sm font-semibold uppercase text-brand-blue">About the publisher</p>
-            <h2 className="mt-3 font-heading text-3xl font-bold leading-tight text-blue-950 sm:text-4xl">
-              A publishing house built around one idea: explain it properly.
-            </h2>
-            <p className="mt-5 text-base leading-7 text-slate-600">
-              Placeholder copy about the people and editorial care behind every title. We believe a clear explanation can make a difficult idea easier to understand.
-            </p>
-            <p className="mt-4 text-base leading-7 text-slate-600">
-              Placeholder copy about creating useful books for classrooms, teachers, and curious readers at every stage of learning.
-            </p>
-
-            <div className="mt-8 grid grid-cols-3 gap-4 border-t border-slate-200 pt-6">
-              <div>
-                <p className="font-heading text-2xl font-bold text-blue-900 sm:text-3xl">2,400+</p>
-                <p className="mt-1 text-sm leading-5 text-slate-500">Partner schools</p>
-              </div>
-              <div>
-                <p className="font-heading text-2xl font-bold text-blue-900 sm:text-3xl">40</p>
-                <p className="mt-1 text-sm leading-5 text-slate-500">Editors & reviewers</p>
-              </div>
-              <div>
-                <p className="font-heading text-2xl font-bold text-blue-900 sm:text-3xl">120</p>
-                <p className="mt-1 text-sm leading-5 text-slate-500">Revised editions / year</p>
-              </div>
-            </div>
-            <p className="mt-3 text-xs text-slate-400">Placeholder figures for layout only</p>
-          </div>
-        </div>
-      </section>
 
       <section className="mx-auto w-full max-w-7xl px-5 py-14 sm:px-8 sm:py-16 lg:px-10 lg:py-20">
         <div className="mb-8 max-w-2xl">
-          <p className="text-sm font-semibold uppercase text-brand-blue">Explore our departments</p>
+          <p className="text-sm font-semibold uppercase text-brand-blue">Browse by subject</p>
           <h2 className="mt-2 font-heading text-2xl font-bold text-blue-950 sm:text-3xl">
-            A department for every stage of school
+            Find a book for every subject
           </h2>
-          <p className="mt-3 text-sm leading-6 text-slate-600">
-            Placeholder descriptions and title counts while our catalogue categories are being finalized.
-          </p>
         </div>
 
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 lg:gap-6">
-          {BOOK_CATEGORIES.map(({ slug, label }) => {
-            const department = departments.find((item) => item.slug === slug);
-            if (!department) {
-              return null;
-            }
-
-            const { icon: Icon, description, color } = department;
+          {departments.filter(({ slug }) => (categoryCounts.get(slug) ?? 0) > 0).map(({ slug, icon: Icon, description, color }) => {
+            const label = SUBJECT_CATEGORIES.find((category) => category.slug === slug)?.label;
+            if (!label) return null;
             const count = categoryCounts.get(slug) ?? 0;
 
             return (
               <Link
                 key={slug}
-                href={`/shop?category=${slug}`}
+                href={`/shop?subject=${slug}`}
                 className="group flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-lg sm:p-7"
               >
                 <span className={`flex h-12 w-12 items-center justify-center rounded-full ${color}`}>
@@ -338,6 +293,21 @@ export default async function HomePage() {
               </Link>
             );
           })}
+        </div>
+
+        <div className="mt-10">
+          <h3 className="mb-4 font-heading text-xl font-semibold text-blue-950">Browse by class</h3>
+          <div className="flex flex-wrap gap-2">
+            {LEVEL_CATEGORIES.map(({ slug, label }) => (
+              <Link
+                key={slug}
+                href={`/shop?level=${slug}`}
+                className="inline-flex min-h-10 items-center rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-blue-900 transition-colors hover:border-blue-300 hover:bg-blue-50"
+              >
+                {label}
+              </Link>
+            ))}
+          </div>
         </div>
       </section>
 

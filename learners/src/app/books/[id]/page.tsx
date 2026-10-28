@@ -11,7 +11,7 @@ export default async function BookDetailPage({
 
   const { data: book, error } = await supabase
     .from('books')
-    .select('*')
+    .select('id, title, description, price, stock, cover_image_url, categories')
     .eq('id', id)
     .eq('is_active', true)
     .single();

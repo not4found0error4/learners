@@ -4,15 +4,22 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Search } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { BOOK_CATEGORIES } from '@/lib/categories';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import {
+  BOOK_CATEGORIES,
+  getCategoryLabel,
+  LEVEL_CATEGORIES,
+  SUBJECT_CATEGORIES,
+} from '@/lib/categories';
 
 export type ShopBook = {
   id: string;
   title: string;
   price: number;
   stock: number;
+  weight_grams: number | null;
   cover_image_url: string | null;
-  category: string | null;
+  categories: string[];
   is_bestseller: boolean;
   class_level: string | null;
   language: string;
@@ -21,30 +28,34 @@ export type ShopBook = {
 
 type ShopCatalogProps = {
   books: ShopBook[];
-  initialCategory: string;
 };
 
-type SortOption = 'title-asc' | 'title-desc' | 'price-asc' | 'price-desc' | 'newest';
-
 const PAGE_SIZE = 9;
-const SORT_OPTIONS: { value: SortOption; label: string }[] = [
-  { value: 'title-asc', label: 'Title A-Z' },
-  { value: 'title-desc', label: 'Title Z-A' },
-  { value: 'price-asc', label: 'Price low to high' },
-  { value: 'price-desc', label: 'Price high to low' },
-  { value: 'newest', label: 'Newest' },
-];
 
-function isSortOption(value: string): value is SortOption {
-  return SORT_OPTIONS.some((option) => option.value === value);
-}
-
-export default function ShopCatalog({ books, initialCategory }: ShopCatalogProps) {
-  const [category, setCategory] = useState(() =>
-    BOOK_CATEGORIES.some(({ slug }) => slug === initialCategory) ? initialCategory : '',
-  );
+export default function ShopCatalog({ books }: ShopCatalogProps) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const levelParam = searchParams.get('level');
+  const subjectParam = searchParams.get('subject');
+  const legacyCategorySlug = searchParams.get('category') ?? '';
+  const mappedLegacyCategorySlug = legacyCategorySlug === 'mathematics'
+    ? 'maths'
+    : /^class-[1-8]$/.test(legacyCategorySlug)
+      ? 'class-1-8'
+      : legacyCategorySlug;
+  const legacyCategory = BOOK_CATEGORIES.find(({ slug }) => slug === mappedLegacyCategorySlug);
+  const level = levelParam
+    ? LEVEL_CATEGORIES.some(({ slug }) => slug === levelParam)
+      ? levelParam
+      : ''
+    : legacyCategory?.group === 'level' ? legacyCategory.slug : '';
+  const subject = subjectParam
+    ? SUBJECT_CATEGORIES.some(({ slug }) => slug === subjectParam)
+      ? subjectParam
+      : ''
+    : legacyCategory?.group === 'subject' ? legacyCategory.slug : '';
   const [search, setSearch] = useState('');
-  const [sort, setSort] = useState<SortOption>('newest');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const categoryCounts = useMemo(
@@ -52,7 +63,7 @@ export default function ShopCatalog({ books, initialCategory }: ShopCatalogProps
       new Map(
         BOOK_CATEGORIES.map(({ slug }) => [
           slug,
-          books.filter((book) => book.category === slug).length,
+          books.filter((book) => book.categories?.includes(slug)).length,
         ]),
       ),
     [books],
@@ -61,40 +72,40 @@ export default function ShopCatalog({ books, initialCategory }: ShopCatalogProps
   const matchingBooks = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase();
     const filteredBooks = books.filter((book) => {
-      const matchesCategory = !category || book.category === category;
+      const matchesLevel = !level || book.categories?.includes(level);
+      const matchesSubject = !subject || book.categories?.includes(subject);
       const matchesSearch = !normalizedSearch || book.title.toLocaleLowerCase().includes(normalizedSearch);
-      return matchesCategory && matchesSearch;
+      return matchesLevel && matchesSubject && matchesSearch;
     });
 
-    return filteredBooks.sort((first, second) => {
-      switch (sort) {
-        case 'title-asc':
-          return first.title.localeCompare(second.title);
-        case 'title-desc':
-          return second.title.localeCompare(first.title);
-        case 'price-asc':
-          return first.price - second.price;
-        case 'price-desc':
-          return second.price - first.price;
-        case 'newest':
-          return Date.parse(second.created_at) - Date.parse(first.created_at);
-      }
-    });
-  }, [books, category, search, sort]);
+    return filteredBooks.sort(
+      (first, second) => Date.parse(second.created_at) - Date.parse(first.created_at),
+    );
+  }, [books, level, subject, search]);
 
   useEffect(() => {
-    const url = new URL(window.location.href);
-    if (category) {
-      url.searchParams.set('category', category);
-    } else {
-      url.searchParams.delete('category');
-    }
-    window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
-  }, [category]);
+    const timeout = window.setTimeout(() => setVisibleCount(PAGE_SIZE), 0);
+    return () => window.clearTimeout(timeout);
+  }, [level, subject]);
 
-  function selectCategory(value: string) {
-    setCategory(value);
+  function updateFilter(group: 'level' | 'subject', value: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('category');
+    if (value) params.set(group, value);
+    else params.delete(group);
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
     setVisibleCount(PAGE_SIZE);
+  }
+
+  function clearFilters() {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('category');
+    params.delete('level');
+    params.delete('subject');
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    updateSearch('');
   }
 
   function updateSearch(value: string) {
@@ -102,66 +113,46 @@ export default function ShopCatalog({ books, initialCategory }: ShopCatalogProps
     setVisibleCount(PAGE_SIZE);
   }
 
-  function updateSort(value: string) {
-    if (isSortOption(value)) {
-      setSort(value);
-      setVisibleCount(PAGE_SIZE);
-    }
-  }
-
   return (
     <div>
-      <div className="rounded-3xl bg-white p-5 shadow-lg shadow-slate-900/5 sm:p-7">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex flex-wrap gap-2" aria-label="Filter by category">
-            <CategoryPill
-              active={!category}
-              count={books.length}
-              label="All titles"
-              onClick={() => selectCategory('')}
+      <div className="rounded-3xl bg-white p-3 shadow-lg shadow-slate-900/5 sm:p-4">
+        <div className="flex flex-col gap-3">
+          <label className="relative block w-full">
+            <span className="sr-only">Search by title</span>
+            <Search
+              aria-hidden="true"
+              className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
             />
-            {BOOK_CATEGORIES.filter(({ slug }) => (categoryCounts.get(slug) ?? 0) > 0).map(
-              ({ slug, label }) => (
-                <CategoryPill
-                  key={slug}
-                  active={category === slug}
-                  count={categoryCounts.get(slug) ?? 0}
-                  label={label}
-                  onClick={() => selectCategory(slug)}
-                />
-              ),
-            )}
-          </div>
+            <input
+              className="min-h-11 w-full rounded-full border border-slate-200 bg-slate-50 py-2 pl-11 pr-4 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/15"
+              onChange={(event) => updateSearch(event.target.value)}
+              placeholder="Search by title"
+              type="search"
+              value={search}
+            />
+          </label>
 
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <label className="relative block min-w-0 flex-1 sm:min-w-64">
-              <span className="sr-only">Search by title</span>
-              <Search
-                aria-hidden="true"
-                className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-              />
-              <input
-                className="min-h-11 w-full rounded-full border border-slate-200 bg-slate-50 py-2 pl-11 pr-4 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/15"
-                onChange={(event) => updateSearch(event.target.value)}
-                placeholder="Search by title"
-                type="search"
-                value={search}
-              />
-            </label>
-            <label>
-              <span className="sr-only">Sort books</span>
-              <select
-                className="min-h-11 w-full rounded-full border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/15 sm:w-auto"
-                onChange={(event) => updateSort(event.target.value)}
-                value={sort}
-              >
-                {SORT_OPTIONS.map(({ value, label }) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <div className="grid gap-3 md:grid-cols-2">
+            <CategoryRow
+              categories={LEVEL_CATEGORIES}
+              categoryCounts={categoryCounts}
+              selected={level}
+              allLabel="All levels"
+              allCount={books.length}
+              rowLabel="Level"
+              ariaLabel="Filter by level"
+              onSelect={(value) => updateFilter('level', value)}
+            />
+            <CategoryRow
+              categories={SUBJECT_CATEGORIES}
+              categoryCounts={categoryCounts}
+              selected={subject}
+              allLabel="All subjects"
+              allCount={books.length}
+              rowLabel="Subject"
+              ariaLabel="Filter by subject"
+              onSelect={(value) => updateFilter('subject', value)}
+            />
           </div>
         </div>
       </div>
@@ -180,11 +171,7 @@ export default function ShopCatalog({ books, initialCategory }: ShopCatalogProps
           </p>
           <button
             className="mt-5 inline-flex min-h-11 items-center justify-center rounded-full border border-brand-blue px-5 text-sm font-semibold text-brand-blue transition-colors hover:bg-blue-50"
-            onClick={() => {
-              setCategory('');
-              updateSearch('');
-              updateSort('newest');
-            }}
+            onClick={clearFilters}
             type="button"
           >
             Clear filters
@@ -231,6 +218,52 @@ export default function ShopCatalog({ books, initialCategory }: ShopCatalogProps
   );
 }
 
+function CategoryRow({
+  categories,
+  categoryCounts,
+  selected,
+  allLabel,
+  allCount,
+  rowLabel,
+  ariaLabel,
+  onSelect,
+}: {
+  categories: typeof LEVEL_CATEGORIES | typeof SUBJECT_CATEGORIES;
+  categoryCounts: Map<string, number>;
+  selected: string;
+  allLabel: string;
+  allCount: number;
+  rowLabel: string;
+  ariaLabel: string;
+  onSelect: (slug: string) => void;
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <span className="shrink-0 text-sm font-semibold text-blue-950">{rowLabel}</span>
+      <div
+        className="flex min-w-0 flex-nowrap gap-2 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible md:pb-0"
+        aria-label={ariaLabel}
+      >
+        <CategoryPill
+          active={!selected}
+          count={allCount}
+          label={allLabel}
+          onClick={() => onSelect('')}
+        />
+        {categories.filter(({ slug }) => (categoryCounts.get(slug) ?? 0) > 0).map(({ slug, label }) => (
+          <CategoryPill
+            key={slug}
+            active={selected === slug}
+            count={categoryCounts.get(slug) ?? 0}
+            label={label}
+            onClick={() => onSelect(slug)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function CategoryPill({
   active,
   count,
@@ -245,7 +278,7 @@ function CategoryPill({
   return (
     <button
       aria-pressed={active}
-      className={`inline-flex min-h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold transition-colors ${
+      className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 text-sm font-semibold transition-colors ${
         active
           ? 'bg-brand-blue text-white'
           : 'bg-slate-100 text-slate-600 hover:bg-blue-50 hover:text-brand-blue'
@@ -254,7 +287,7 @@ function CategoryPill({
       type="button"
     >
       {label}
-      <span className={`text-xs ${active ? 'text-white/75' : 'text-slate-400'}`}>{count}</span>
+      <span className={`text-[10px] ${active ? 'text-white/75' : 'text-slate-400'}`}>{count}</span>
     </button>
   );
 }
@@ -262,7 +295,9 @@ function CategoryPill({
 function BookCard({ book }: { book: ShopBook }) {
   const coverUrl = book.cover_image_url || 'https://placehold.co/300x400';
   const isSvgCover = /\.svg(?:[?#]|$)/i.test(coverUrl);
-  const categoryLabel = BOOK_CATEGORIES.find(({ slug }) => slug === book.category)?.label;
+  const categoryLabels = book.categories
+    .map((slug) => getCategoryLabel(slug))
+    .filter((label): label is string => label !== undefined);
 
   return (
     <Link
@@ -271,15 +306,17 @@ function BookCard({ book }: { book: ShopBook }) {
       }`}
       href={`/books/${book.id}`}
     >
-      <div className="relative aspect-3/4 overflow-hidden bg-[#f3f1ed] p-4 sm:p-5">
-        <Image
-          alt={book.title}
-          className="object-contain transition-transform duration-300 group-hover:scale-[1.02]"
-          fill
-          src={coverUrl}
-          unoptimized={isSvgCover}
-          sizes="(max-width: 639px) 100vw, (max-width: 1023px) 50vw, 33vw"
-        />
+      <div className="relative aspect-4/5 bg-[#f3f1ed] p-4">
+        <div className="relative flex h-full w-full items-center justify-center">
+          <Image
+            alt={book.title}
+            className="rounded-sm object-contain drop-shadow-lg transition-transform duration-300 group-hover:scale-[1.02]"
+            fill
+            src={coverUrl}
+            unoptimized={isSvgCover}
+            sizes="(max-width: 639px) 100vw, (max-width: 1023px) 50vw, 33vw"
+          />
+        </div>
         {book.is_bestseller && (
           <span className="absolute left-4 top-4 rounded-full bg-brand-blue px-3 py-1.5 text-xs font-semibold text-white shadow-sm">
             Bestseller
@@ -292,10 +329,14 @@ function BookCard({ book }: { book: ShopBook }) {
         )}
       </div>
       <div className="p-5 sm:p-6">
-        {categoryLabel && (
-          <span className="inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-brand-blue">
-            {categoryLabel}
-          </span>
+        {categoryLabels.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {categoryLabels.map((label) => (
+              <span key={label} className="inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-brand-blue">
+                {label}
+              </span>
+            ))}
+          </div>
         )}
         <h2 className="mt-3 line-clamp-2 min-h-14 font-heading text-lg font-semibold leading-7 text-blue-950">
           {book.title}

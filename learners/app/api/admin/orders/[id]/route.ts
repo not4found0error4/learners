@@ -16,7 +16,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
   const { data, error } = await supabase
     .from('orders')
     .select(`
-      id, customer_id, total_amount, status, razorpay_order_id, razorpay_payment_id, created_at,
+      id, customer_id, subtotal_amount, shipping_amount, total_weight_grams, total_amount, status, razorpay_order_id, razorpay_payment_id, created_at,
       customers(id, name, email, phone, address, city, state, pincode),
       order_items(id, book_id, quantity, price_at_purchase, books(title)),
       order_status_history(id, old_status, new_status, changed_at)

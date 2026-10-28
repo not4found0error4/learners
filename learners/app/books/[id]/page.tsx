@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { BOOK_CATEGORIES } from '@/lib/categories';
 
+type BookCategory = (typeof BOOK_CATEGORIES)[number];
+
 export default async function BookDetailPage({
   params,
 }: {
@@ -14,7 +16,7 @@ export default async function BookDetailPage({
 
   const { data: book, error } = await supabase
     .from('books')
-    .select('id, title, description, price, stock, cover_image_url, class_level, language, category')
+    .select('id, title, description, price, stock, weight_grams, cover_image_url, class_level, language, categories')
     .eq('id', id)
     .eq('is_active', true)
     .single();
@@ -25,7 +27,13 @@ export default async function BookDetailPage({
 
   const coverUrl = book.cover_image_url || 'https://placehold.co/300x400';
   const isSvgCover = /\.svg(?:[?#]|$)/i.test(coverUrl);
-  const categoryLabel = BOOK_CATEGORIES.find(({ slug }) => slug === book.category)?.label;
+  const categorySlugs: unknown = book.categories;
+  const categories: BookCategory[] = Array.isArray(categorySlugs)
+    ? categorySlugs
+      .filter((slug): slug is string => typeof slug === 'string')
+      .map((slug) => BOOK_CATEGORIES.find((category) => category.slug === slug))
+      .filter((category): category is BookCategory => category !== undefined)
+    : [];
   const classLevel = book.class_level?.trim();
   const language = book.language?.trim();
   const description = book.description?.trim();
@@ -34,27 +42,35 @@ export default async function BookDetailPage({
     <main className="w-full">
       <section className="mx-auto grid w-full max-w-7xl items-start gap-10 px-5 py-14 sm:px-8 sm:py-20 lg:grid-cols-2 lg:gap-16 lg:px-10 lg:py-24">
         <aside className="w-full lg:sticky lg:top-28">
-          <div className="rounded-3xl bg-[#f3f1ed] p-5 shadow-xl shadow-slate-900/10 sm:p-8">
-            <div className="relative mx-auto aspect-3/4 w-full max-w-xl">
+          <div className="relative mx-auto aspect-4/5 w-full max-w-xl rounded-3xl bg-[#f3f1ed] p-8 shadow-xl shadow-slate-900/10">
+            <div className="relative flex h-full w-full items-center justify-center">
               <Image
                 src={coverUrl}
                 alt={book.title}
                 fill
                 sizes="(max-width: 1023px) 100vw, 50vw"
                 unoptimized={isSvgCover}
-                className="object-contain drop-shadow-xl"
+                className="rounded-sm object-contain drop-shadow-lg"
               />
             </div>
           </div>
         </aside>
 
         <div className="max-w-2xl">
-          {categoryLabel && (
-            <span className="inline-flex rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-brand-blue">
-              {categoryLabel}
-            </span>
+          {categories.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {categories.map(({ slug, label, group }) => (
+                <Link
+                  key={slug}
+                  href={`/shop?${group}=${slug}`}
+                  className="inline-flex rounded-full bg-blue-50 px-3 py-1.5 text-xs font-semibold text-brand-blue transition-colors hover:bg-blue-100"
+                >
+                  {label}
+                </Link>
+              ))}
+            </div>
           )}
-          <h1 className="mt-4 font-heading text-3xl font-bold leading-tight text-blue-950 sm:text-4xl lg:text-5xl">
+          <h1 className={`${categories.length > 0 ? 'mt-4' : ''} font-heading text-3xl font-bold leading-tight text-blue-950 sm:text-4xl lg:text-5xl`}>
             {book.title}
           </h1>
 
@@ -100,7 +116,9 @@ export default async function BookDetailPage({
                 title: book.title,
                 price: book.price,
                 cover_image_url: book.cover_image_url,
+                weight_grams: book.weight_grams,
               }}
+              maxQuantity={book.stock}
               disabled={book.stock === 0}
             />
             <Link
